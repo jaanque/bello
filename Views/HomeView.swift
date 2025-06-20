@@ -171,10 +171,10 @@ struct HomeView: View {
             .onDisappear {
                 viewModel.cleanupTimer() // Cleanup timer when view disappears
             }
-            .sheet(item: $viewModel.selectedVideoURL, onDismiss: {
+            .sheet(item: $viewModel.selectedPlayableItem, onDismiss: { // Changed to selectedPlayableItem
                 viewModel.deselectVideo()
-            }) { videoURL in
-                VideoPlayerView(videoURL: videoURL)
+            }) { playableItem in // Changed closure parameter name
+                VideoPlayerView(videoURL: playableItem.url) // Use .url from the item
             }
             .sheet(item: $itemToShare) { item in
                 ActivityView(activityItems: [item.url])

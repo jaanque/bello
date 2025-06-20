@@ -100,10 +100,14 @@ class CameraService: NSObject, ObservableObject, AVCaptureFileOutputRecordingDel
             // Depending on requirements, may proceed without audio or fully fail.
             // For now, proceeding without audio input if it fails.
             // If audio is critical, return here.
+            // The audio input is already added by the guard statement if successful.
+            // The following 'if let' block was redundant and contained the force unwrap.
         }
-        if let audioDeviceInput = try? AVCaptureDeviceInput(device: audioDevice!), session.canAddInput(audioDeviceInput) {
-             session.addInput(audioDeviceInput)
-        }
+        // else {
+        //    // This means audioDevice was non-nil, audioDeviceInput was created, and session.canAddInput was true
+        //    // and session.addInput(audioDeviceInput) was already called by the guard.
+        //    // No further action needed here for adding the input.
+        // }
 
 
         // Video Output
@@ -229,6 +233,7 @@ enum CameraError: Error, LocalizedError {
     case notRecording
     case permissionsDenied
     case setupFailed(String)
+    case underlyingError(Error) // Ensure this case is present
 
     var errorDescription: String? {
         switch self {
@@ -240,6 +245,8 @@ enum CameraError: Error, LocalizedError {
             return "Camera and/or Microphone permissions were denied."
         case .setupFailed(let reason):
             return "Camera setup failed: \(reason)"
+        case .underlyingError(let error):
+            return "An error occurred during camera operation: \(error.localizedDescription)"
         }
     }
 }

@@ -25,26 +25,31 @@ struct CameraView: View {
             CameraPreview(cameraService: cameraService)
                 .frame(height: 300) // Adjust as needed
                 .onAppear {
-                    cameraService.checkPermissions { granted in
-                        if granted {
-                            // Setup camera once permissions are confirmed
-                            // The previewView for setupCamera will be the underlying UIView of CameraPreview
-                        } else {
-                            showPermissionsAlert = true
-                            errorMessage = "Camera and/or microphone permissions denied."
-                        }
+                    // Set initial permission state based on current status
+                    cameraService.getInitialPermissionStatus()
+                    // If not granted and status is .notDetermined, checkPermissions will prompt.
+                    // If .denied, checkPermissions will update cameraService.arePermissionsGranted and cameraService.cameraError.
+                    if !cameraService.arePermissionsGranted {
+                         cameraService.checkPermissions()
                     }
+                    // NOTE: The logic for showPermissionsAlert and errorMessage
+                    // needs to be refactored to observe cameraService.arePermissionsGranted
+                    // and cameraService.cameraError in a subsequent step.
                 }
-                .alert("Permissions Denied", isPresented: $showPermissionsAlert) {
+                // The alert's trigger ($showPermissionsAlert) and content also need to be refactored
+                // to use cameraService.cameraError and cameraService.arePermissionsGranted.
+                // This is a placeholder alert structure based on the old one.
+                .alert("Permissions Status", isPresented: $showPermissionsAlert) { // $showPermissionsAlert will need to be updated by observing CameraService
                     Button("OK", role: .cancel) { }
-                    // Optionally, add a button to open app settings
-                    if let url = URL(string: UIApplication.openSettingsURLString) {
-                        Button("Open Settings") {
-                            UIApplication.shared.open(url)
+                    if !cameraService.arePermissionsGranted && cameraService.cameraError == .permissionsDenied { // Example condition
+                         if let url = URL(string: UIApplication.openSettingsURLString) {
+                            Button("Open Settings") {
+                                UIApplication.shared.open(url)
+                            }
                         }
                     }
-                } message: {
-                    Text("Bello needs access to your camera and microphone to record videos. Please enable access in Settings.")
+                } message: { // Example message update
+                    Text(errorMessage ?? "Please grant camera and microphone access in Settings to record video.")
                 }
 
 
