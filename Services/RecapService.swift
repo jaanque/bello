@@ -62,10 +62,9 @@ class RecapService {
     // MARK: - Recap Video Composition
 
     /// Generates a recap video from an array of Video objects.
-    func generateRecap(videos: [Video], outputURL: URL, completion: @escaping (Result<URL, Error>) -> Void) {
+    func generateRecap(videos: [Video], outputURL: URL) async throws -> URL {
         if videos.isEmpty {
-            completion(.failure(RecapError.noVideosForPeriod))
-            return
+            throw RecapError.noVideosForPeriod
         }
 
         // Check if file already exists at outputURL
@@ -73,8 +72,7 @@ class RecapService {
             // This check is more for direct calls to generateRecap.
             // The generateWeekly/MonthlyRecapIfNeeded methods should handle this before calling.
             print("Recap file already exists at \(outputURL.path). Generation skipped by generateRecap itself.")
-            completion(.failure(RecapError.fileExists(outputURL)))
-            return
+            throw RecapError.fileExists(outputURL)
         }
 
         let composition = AVMutableComposition()
@@ -84,12 +82,12 @@ class RecapService {
             let asset = AVURLAsset(url: video.url)
             do {
                 // Check for video tracks
-                guard let assetVideoTrack = try await asset.loadTracks(withMediaType: .video).first else {
+                guard let assetVideoTrack = try await asset.loadTrackContents(withMediaType: .video).first else {
                     print("Warning: No video track found in \(video.url.lastPathComponent). Skipping this video.")
                     continue
                 }
                 // Check for audio tracks (optional, but good to include if present)
-                let assetAudioTrack = try await asset.loadTracks(withMediaType: .audio).first
+                let assetAudioTrack = try await asset.loadTrackContents(withMediaType: .audio).first
 
                 // Add video track
                 let videoTrack = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid)
@@ -112,119 +110,96 @@ class RecapService {
                 print("Error processing asset \(video.url.lastPathComponent): \(error.localizedDescription)")
                 // Decide if one bad asset should fail the whole recap or just be skipped.
                 // For now, let's skip and continue. If all fail, it'll result in an empty/short video or error later.
+                // Or, rethrow the error to fail the entire recap generation:
+                // throw RecapError.underlyingError(error)
                 continue
             }
         }
 
         // Check if any tracks were actually added
         if composition.tracks.isEmpty {
-            completion(.failure(RecapError.compositionFailed("No valid video tracks found in the provided videos.")))
-            return
+            throw RecapError.compositionFailed("No valid video tracks found in the provided videos.")
         }
 
         guard let exportSession = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else {
-            completion(.failure(RecapError.exportFailed("Could not create AVAssetExportSession.")))
-            return
+            throw RecapError.exportFailed("Could not create AVAssetExportSession.")
         }
 
         exportSession.outputURL = outputURL
         exportSession.outputFileType = .mp4
         exportSession.shouldOptimizeForNetworkUse = true
 
-        exportSession.exportAsynchronously {
-            DispatchQueue.main.async {
-                switch exportSession.status {
-                case .completed:
-                    completion(.success(outputURL))
-                case .failed:
-                    let error = exportSession.error ?? RecapError.exportFailed("Unknown export error")
-                    completion(.failure(RecapError.underlyingError(error)))
-                case .cancelled:
-                    completion(.failure(RecapError.exportFailed("Export was cancelled.")))
-                default:
-                    completion(.failure(RecapError.exportFailed("Export status: \(exportSession.status.rawValue)")))
-                }
-            }
+        // Perform export asynchronously
+        await exportSession.export()
+
+        // Check export status
+        switch exportSession.status {
+        case .completed:
+            return outputURL
+        case .failed:
+            let error = exportSession.error ?? RecapError.exportFailed("Unknown export error")
+            throw RecapError.underlyingError(error)
+        case .cancelled:
+            throw RecapError.exportFailed("Export was cancelled.")
+        default:
+            throw RecapError.exportFailed("Export status: \(exportSession.status.rawValue)")
         }
     }
 
     // MARK: - Recap Generation Triggers & Naming
 
-    func generateWeeklyRecapIfNeeded(for targetDate: Date = Date()) {
-        let calendar = Calendar.current // Ensure this matches week definition used in getVideos
-
-        // Let's define "last completed week" as the week ending before the start of the current week.
-        // Or, for simplicity now, "current week" and if no videos, it won't generate.
-        // Product spec: "visible if existe recap para la semana actual o pasada"
-        // Let's try for the week of the targetDate first.
-
+    func generateWeeklyRecapIfNeeded(for targetDate: Date = Date()) async throws {
+        let calendar = Calendar.current
         let year = calendar.component(.yearForWeekOfYear, from: targetDate)
         let weekOfYear = calendar.component(.weekOfYear, from: targetDate)
 
-        generateRecapForWeek(weekOfYear: weekOfYear, year: year, type: .current) { result in
-            // Handle result - e.g. log success or failure
-             switch result {
-            case .success(let url):
-                print("Successfully generated current weekly recap: \(url.path)")
-            case .failure(RecapError.fileExists(let url)):
-                print("Current weekly recap already exists: \(url.path)")
-            case .failure(RecapError.noVideosForPeriod):
-                print("No videos for current week (\(year)-W\(weekOfYear)), trying last week.")
-                // If current week had no videos or failed, try previous week
-                if let previousWeekDate = calendar.date(byAdding: .weekOfYear, value: -1, to: targetDate) {
-                    let prevYear = calendar.component(.yearForWeekOfYear, from: previousWeekDate)
-                    let prevWeekOfYear = calendar.component(.weekOfYear, from: previousWeekDate)
-                    self.generateRecapForWeek(weekOfYear: prevWeekOfYear, year: prevYear, type: .previous) { prevResult in
-                         switch prevResult {
-                        case .success(let url):
-                            print("Successfully generated previous weekly recap: \(url.path)")
-                        case .failure(RecapError.fileExists(let url)):
-                            print("Previous weekly recap already exists: \(url.path)")
-                        case .failure(let error):
-                            print("Failed to generate previous weekly recap: \(error.localizedDescription)")
-                        }
-                    }
-                }
-            case .failure(let error):
-                print("Failed to generate current weekly recap: \(error.localizedDescription)")
+        do {
+            try await generateRecapForWeek(weekOfYear: weekOfYear, year: year, type: .current)
+            print("Successfully generated current weekly recap for \(year)-W\(weekOfYear).")
+        } catch RecapError.noVideosForPeriod {
+            print("No videos for current week (\(year)-W\(weekOfYear)), trying last week.")
+            if let previousWeekDate = calendar.date(byAdding: .weekOfYear, value: -1, to: targetDate) {
+                let prevYear = calendar.component(.yearForWeekOfYear, from: previousWeekDate)
+                let prevWeekOfYear = calendar.component(.weekOfYear, from: previousWeekDate)
+                try await generateRecapForWeek(weekOfYear: prevWeekOfYear, year: prevYear, type: .previous)
+                print("Successfully generated previous weekly recap for \(prevYear)-W\(prevWeekOfYear).")
             }
+        } catch RecapError.fileExists(let url) {
+            print("Weekly recap already exists: \(url.path)")
+        } catch {
+            // Other errors rethrown
+            throw error
         }
     }
 
     enum RecapWeekType { case current, previous }
 
-    private func generateRecapForWeek(weekOfYear: Int, year: Int, type: RecapWeekType, completion: @escaping (Result<URL, Error>) -> Void) {
+    private func generateRecapForWeek(weekOfYear: Int, year: Int, type: RecapWeekType) async throws {
         guard let documentsDirectory = videoStorageService.getVideosDirectory() else {
-            completion(.failure(RecapError.compositionFailed("Could not get documents directory.")))
-            return
+            throw RecapError.compositionFailed("Could not get documents directory.")
         }
         let weekString = String(format: "%04d-W%02d", year, weekOfYear)
         let outputURL = documentsDirectory.appendingPathComponent("recap_week_\(weekString).mp4")
 
         if fileManager.fileExists(atPath: outputURL.path) {
-            completion(.failure(RecapError.fileExists(outputURL)))
-            return
+            throw RecapError.fileExists(outputURL)
         }
 
         let videosForWeek = getVideos(forWeek: weekOfYear, year: year)
         if videosForWeek.isEmpty {
-            completion(.failure(RecapError.noVideosForPeriod))
-            return
+            throw RecapError.noVideosForPeriod
         }
 
         print("Attempting to generate \(type) weekly recap for \(weekString) with \(videosForWeek.count) videos.")
-        generateRecap(videos: videosForWeek, outputURL: outputURL, completion: completion)
+        _ = try await generateRecap(videos: videosForWeek, outputURL: outputURL)
     }
 
-
-    func generateMonthlyRecapIfNeeded(for targetDate: Date = Date()) {
+    func generateMonthlyRecapIfNeeded(for targetDate: Date = Date()) async throws {
         let calendar = Calendar.current
-
-        // "Visible sólo si existe recap para el mes anterior"
-        // So, we always aim to generate for the *previous* month.
         guard let previousMonthDate = calendar.date(byAdding: .month, value: -1, to: targetDate) else {
             print("Error: Could not calculate previous month from targetDate.")
-            return
+            // Or throw an error
+            throw RecapError.compositionFailed("Could not calculate previous month.")
         }
 
         let year = calendar.component(.year, from: previousMonthDate)
@@ -232,38 +207,28 @@ class RecapService {
 
         let monthString = String(format: "%04d-%02d", year, month)
         guard let documentsDirectory = videoStorageService.getVideosDirectory() else {
-            print("Recap Error: Could not access documents directory.")
-            // Consider a completion handler if this needs to be communicated
-            return
+            throw RecapError.compositionFailed("Could not access documents directory.")
         }
         let outputURL = documentsDirectory.appendingPathComponent("recap_month_\(monthString).mp4")
 
         if fileManager.fileExists(atPath: outputURL.path) {
             print("Monthly recap for \(monthString) already exists: \(outputURL.path)")
-            // Call completion if this method had one: completion(.failure(RecapError.fileExists(outputURL)))
+            // No error needed here, just means it's done.
+            // Or throw RecapError.fileExists(outputURL) if caller needs to know.
+            // For "IfNeeded" semantics, not throwing an error for pre-existence is fine.
             return
         }
 
         let videosForMonth = getVideos(forMonth: month, year: year)
         if videosForMonth.isEmpty {
             print("No videos found for month \(monthString) to generate recap.")
-            // Call completion if this method had one: completion(.failure(RecapError.noVideosForPeriod))
+            // No error needed here either for "IfNeeded".
             return
         }
 
         print("Attempting to generate monthly recap for \(monthString) with \(videosForMonth.count) videos.")
-        generateRecap(videos: videosForMonth, outputURL: outputURL) { result in
-            // Handle result - e.g. log success or failure
-            switch result {
-            case .success(let url):
-                print("Successfully generated monthly recap: \(url.path)")
-            case .failure(RecapError.fileExists(_)):
-                 // This case should ideally be caught above, but good to have the enum case
-                print("Monthly recap for \(monthString) already existed (checked again inside generateRecap).")
-            case .failure(let error):
-                print("Failed to generate monthly recap for \(monthString): \(error.localizedDescription)")
-            }
-        }
+        _ = try await generateRecap(videos: videosForMonth, outputURL: outputURL)
+        print("Successfully generated monthly recap: \(outputURL.path)")
     }
 
     // MARK: - Date Helpers (Can be expanded or moved to a dedicated DateUtil)
@@ -275,7 +240,7 @@ class RecapService {
 
 // Extension to make Video struct's URL assets awaitable for track loading
 extension AVURLAsset {
-    func loadTracks(withMediaType mediaType: AVMediaType) async throws -> [AVAssetTrack] {
+    func loadTrackContents(withMediaType mediaType: AVMediaType) async throws -> [AVAssetTrack] {
         try await self.load(.tracks).filter { $0.mediaType == mediaType }
     }
 }

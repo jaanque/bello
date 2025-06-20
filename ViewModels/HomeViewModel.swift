@@ -4,7 +4,7 @@ import Combine
 class HomeViewModel: ObservableObject {
     @Published var videosForDisplayedMonth: [Video] = []
     @Published var displayedDate: Date = Date()
-    @Published var selectedVideoURL: URL? = nil // Changed to play any URL
+    @Published var selectedPlayableItem: PlayableVideoItem? = nil // Replaces selectedVideoURL
 
     @Published var weeklyRecap: RecapInfo? = nil
     @Published var monthlyRecap: RecapInfo? = nil
@@ -77,12 +77,12 @@ class HomeViewModel: ObservableObject {
     }
 
     // MARK: - Video Playback
-    func selectVideo(url: URL) { // Parameter changed to URL
-        self.selectedVideoURL = url
+    func selectVideoForPlayback(url: URL) { // Renamed and implementation changed
+        self.selectedPlayableItem = PlayableVideoItem(url: url)
     }
 
-    func deselectVideo() {
-        self.selectedVideoURL = nil
+    func deselectVideo() { // Name is fine, implementation changes
+        self.selectedPlayableItem = nil
     }
 
     // MARK: - Recap Fetching

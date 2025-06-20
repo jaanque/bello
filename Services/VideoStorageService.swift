@@ -6,8 +6,8 @@ class VideoStorageService {
     static let shared = VideoStorageService() // Singleton for easy access if needed
 
     private let fileManager = FileManager.default
-    private let dailyVideoFilenameRegex = #"^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.mp4$"
-    private let recapVideoFilenameRegex = #"^recap_.*\.mp4$"
+    private let dailyVideoFilenameRegex = "^\\d{4}-\\d{2}-\\d{2}_\\d{2}-\\d{2}-\\d{2}\\.mp4$" // Using standard string
+    private let recapVideoFilenameRegex = "^recap_.*\\.mp4$" // Using standard string
 
 
     // Date formatter for parsing filenames

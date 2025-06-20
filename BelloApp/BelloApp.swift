@@ -9,23 +9,34 @@ struct BelloApp: App {
             ContentView()
                 .onAppear {
                     // Initial setup when the app's main view appears
-                    // Request permission early if not determined.
-                    // Subsequent calls from scenePhase will handle rescheduling.
                     NotificationService.shared.checkAndScheduleReminder()
 
-                    // Recap generation can also be triggered here or more selectively
-                    RecapService.shared.generateWeeklyRecapIfNeeded()
-                    RecapService.shared.generateMonthlyRecapIfNeeded()
+                    Task {
+                        do {
+                            try await RecapService.shared.generateWeeklyRecapIfNeeded()
+                            try await RecapService.shared.generateMonthlyRecapIfNeeded()
+                            print("Recap generation check completed on app appear.")
+                        } catch {
+                            print("Error generating recaps on app appear: \(error.localizedDescription)")
+                        }
+                    }
                 }
         }
         .onChange(of: scenePhase) { newPhase in
             if newPhase == .active {
                 print("App became active. Checking and scheduling reminder.")
                 NotificationService.shared.checkAndScheduleReminder()
+
+                Task {
+                    do {
+                        try await RecapService.shared.generateWeeklyRecapIfNeeded()
+                        try await RecapService.shared.generateMonthlyRecapIfNeeded()
+                        print("Recap generation check completed on app active.")
+                    } catch {
+                        print("Error generating recaps on app active: \(error.localizedDescription)")
+                    }
+                }
             }
-            // else if newPhase == .background {
-                // Optional: Perform cleanup or save state if needed
-            // }
         }
     }
 }

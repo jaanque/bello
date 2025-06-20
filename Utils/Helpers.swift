@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 // This file can contain utility functions, extensions, and constants
 // that are used across the application.

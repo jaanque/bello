@@ -57,7 +57,7 @@ struct HomeView: View {
                                     recapInfo: monthlyRecap,
                                     backgroundColor: Color.yellow.opacity(0.2),
                                     iconName: "sparkles",
-                                    onPlay: { viewModel.selectVideo(url: monthlyRecap.url) },
+                                onPlay: { viewModel.selectVideoForPlayback(url: monthlyRecap.url) },
                                     onShare: { self.itemToShare = ShareableItem(url: monthlyRecap.url) }
                                 )
                                 .padding(.horizontal)
@@ -69,7 +69,7 @@ struct HomeView: View {
                                     recapInfo: weeklyRecap,
                                     backgroundColor: Color.purple.opacity(0.2),
                                     iconName: "film.stack",
-                                    onPlay: { viewModel.selectVideo(url: weeklyRecap.url) },
+                                onPlay: { viewModel.selectVideoForPlayback(url: weeklyRecap.url) },
                                     onShare: { self.itemToShare = ShareableItem(url: weeklyRecap.url) }
                                 )
                                 .padding(.horizontal)
@@ -105,7 +105,7 @@ struct HomeView: View {
                                     ForEach(viewModel.videosForDisplayedMonth) { video in
                                         VideoGridItemView(video: video)
                                             .onTapGesture {
-                                                viewModel.selectVideo(url: video.url)
+                                            viewModel.selectVideoForPlayback(url: video.url) // Use new method
                                             }
                                             .contextMenu {
                                                 Button(role: .destructive) {
