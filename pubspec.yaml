@@ -1,0 +1,29 @@
+name: bello
+description: A Flutter application for daily video capture.
+publish_to: 'none' # Remove this line if you intend to publish to pub.dev
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0' # Adjusted to a reasonable recent range
+
+dependencies:
+  flutter:
+    sdk: flutter
+  intl: ^0.19.0 # Or latest version
+  camera: ^0.10.5+9 # Use a recent stable version
+  path_provider: ^2.1.1 # Use a recent stable version
+  path: ^1.8.3 # Use a recent stable version
+  video_player: ^2.8.1 # Use a recent stable version
+  ffmpeg_kit_flutter: ^5.1.0
+  share_plus: ^7.2.2
+  # Add other dependencies here as they become necessary
+  # e.g., camera, video_player, flutter_local_notifications, path_provider, intl
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
