@@ -1,11 +1,18 @@
+import 'package:bello/notification_service.dart'; // Adjust import path if necessary
 import 'package:flutter/material.dart';
-import 'home_screen.dart'; // We'll create this next
+import 'home_screen.dart';
 
 // Define color constants
 const Color lilacPastel = Color(0xFFE6E6FA);
 const Color goldPastel = Color(0xFFFFFACD);
 
-void main() {
+Future<void> main() async { // Make main async
+  WidgetsFlutterBinding.ensureInitialized(); // Required before calling native code
+  await NotificationService.initialize(); // Initialize notifications
+  // Optional: Schedule reminder on app startup if not already handled robustly
+  // This ensures it's set if the app was closed and reopened.
+  // However, if _hasRecordedToday is true, we should not schedule it.
+  // This logic is better placed in HomeScreen's initState after checking _hasRecordedToday.
   runApp(const BelloApp());
 }
 
