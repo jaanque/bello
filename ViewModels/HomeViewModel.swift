@@ -137,7 +137,8 @@ class HomeViewModel: ObservableObject {
 
     // MARK: - Record Button State Management
     func updateRecordButtonState() {
-        if videoStorageService.hasRecordedVideoToday() {
+        let recordedToday = videoStorageService.hasRecordedVideoToday()
+        if recordedToday {
             self.canRecordToday = false
             startCountdownTimer()
         } else {
@@ -146,6 +147,8 @@ class HomeViewModel: ObservableObject {
             self.timeUntilNextRecording = ""
             countdownTimer?.cancel() // Stop any existing timer
         }
+        // After updating button state, also update notification scheduling
+        NotificationService.shared.checkAndScheduleReminder()
     }
 
     private func startCountdownTimer() {
